@@ -1,0 +1,7 @@
+<launch>
+  <include file="$(find rm_description_for_task)/launch/hero.launch"/>
+
+  <rosparam file="$(find hero_chassis_controller)/config/default.yaml" command="load"/>
+  <node name="controller_spawner" pkg="controller_manager" type="spawner"
+        args="hero_chassis_controller joint_state_controller" output="screen"/>
+</launch>

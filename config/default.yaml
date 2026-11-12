@@ -1,1 +1,40 @@
-subscriber_topic: /temperature
+hero_chassis_controller:
+  type: hero_chassis_controller/HeroChassisController
+  target_velocity: 0.0  # rad/s; initial target for all four wheels
+
+  front_left:
+    pid:
+      p: 0.5
+      i: 0.1
+      d: 0.0
+      i_clamp: 0.5
+      antiwindup: true
+      publish_state: true
+  front_right:
+    pid:
+      p: 0.5
+      i: 0.1
+      d: 0.0
+      i_clamp: 0.5
+      antiwindup: true
+      publish_state: true
+  back_left:
+    pid:
+      p: 0.5
+      i: 0.1
+      d: 0.0
+      i_clamp: 0.5
+      antiwindup: true
+      publish_state: true
+  back_right:
+    pid:
+      p: 0.5
+      i: 0.1
+      d: 0.0
+      i_clamp: 0.5
+      antiwindup: true
+      publish_state: true
+
+joint_state_controller:
+  type: joint_state_controller/JointStateController
+  publish_rate: 50

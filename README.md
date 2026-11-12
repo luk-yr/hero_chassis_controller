@@ -1,200 +1,75 @@
-# Package Name
+# hero_chassis_controller
 
-## Overview
+基于 ROS Noetic 和 ros_control 的底盘控制器，用于 Gazebo 仿真。
 
-This is a template: replace, remove, and add where required. Describe here what this package does and what it's meant
-for in a few sentences.
+## 开发环境
 
-**Keywords:** example, package, template
+- Ubuntu 20.04、ROS Noetic（Docker 容器内）
+- Gazebo 11
+- CLion、C++14、catkin_tools
 
-Or, add some keywords to the Bitbucket or GitHub repository.
+## 当前进度
 
-### License
+已实现四个独立的 `control_toolbox::Pid`。每个周期读取各轮实际角速度，
+用“目标角速度 − 实际角速度”计算误差，再将 PID 输出作为该轮的力矩指令。
+目前四轮使用同一个目标角速度，单位为 rad/s；没有实现底盘逆运动学。
 
-The source code is released under a [BSD 3-Clause license](LICENSE).
+已在 Gazebo 中验证编译、插件加载、四轮速度跟踪和在线修改 PID 参数。
+当前初始参数为 `p=0.5`、`i=0.1`、`d=0.0`，微分项暂未启用。
+在当前模型的正、反向 2 rad/s 测试中，末段四轮平均速度均接近目标；
+正向启动峰值约为 2.42 rad/s。实际轮速仍有周期波动，这组参数作为初步可用值，
+仍需结合曲线学习和调整。
 
-**Author: Péter Fankhauser<br />
-Affiliation: [ANYbotics](https://www.anybotics.com/)<br />
-Maintainer: Péter Fankhauser, pfankhauser@anybotics.com**
+## 构建
 
-The PACKAGE NAME package has been tested under [ROS] Indigo, Melodic and Noetic on respectively Ubuntu 14.04, 18.04 and
-20.04. This is research code, expect that it changes often and any fitness for a particular purpose is disclaimed.
+在已加载 ROS 环境的 CLion 中打开本包的 `CMakeLists.txt`，构建
+`hero_chassis_controller` 目标。
 
-[![Build Status](http://rsl-ci.ethz.ch/buildStatus/icon?job=ros_best_practices)](http://rsl-ci.ethz.ch/job/ros_best_practices/)
+## 仿真与速度指令
 
-![Example image](doc/example.jpg)
+以下命令在当前 Docker 容器内执行。当前 CLion 的构建输出位于包的私有 devel 目录，
+运行前先加载该环境：
 
-[comment]: <> (### Publications)
+```bash
+source /home/ros/ROS-ws/devel/.private/hero_chassis_controller/setup.bash
+roslaunch hero_chassis_controller pid_test.launch
+```
 
-[comment]: <> (If you use this work in an academic context, please cite the following publication&#40;s&#41;:)
+启动文件加载任务底盘模型、本包控制器和关节状态发布控制器。
+另开一个已加载上述环境的终端，给四轮发送 2 rad/s 的目标：
 
-[comment]: <> (* P. Fankhauser, M. Bloesch, C. Gehring, M. Hutter, and R. Siegwart: **PAPER TITLE**. IEEE/RSJ International Conference)
+```bash
+rostopic pub -r 10 /hero_chassis_controller/command std_msgs/Float64 "data: 2.0"
+```
 
-[comment]: <> (  on Intelligent Robots and Systems &#40;IROS&#41;, 2015. &#40;[PDF]&#40;http://dx.doi.org/10.3929/ethz-a-010173654&#41;&#41;)
+停止发布不会清除最后一次目标。需要停车时，先按 Ctrl+C 结束上述命令，再发送零目标：
 
-[comment]: <> (        @inproceedings{Fankhauser2015,)
+```bash
+rostopic pub -1 /hero_chassis_controller/command std_msgs/Float64 "data: 0.0"
+```
 
-[comment]: <> (            author = {Fankhauser, P\'{e}ter and Hutter, Marco},)
+## 查看曲线与调整参数
 
-[comment]: <> (            booktitle = {IEEE/RSJ International Conference on Intelligent Robots and Systems &#40;IROS&#41;},)
+```bash
+rosrun rqt_plot rqt_plot /hero_chassis_controller/command/data \
+  '/joint_states/velocity[0]' '/joint_states/velocity[1]' \
+  '/joint_states/velocity[2]' '/joint_states/velocity[3]'
+rosrun rqt_reconfigure rqt_reconfigure
+```
 
-[comment]: <> (            title = {{PAPER TITLE}},)
+两个图形工具需分别在终端中启动。当前模型的 `joint_states` 顺序为左后、左前、右后、右前；
+若更换模型或发布方式，先核对消息中的 `name`，再使用对应下标。
 
-[comment]: <> (            publisher = {IEEE},)
+参数窗口中展开 `/hero_chassis_controller`，每个轮子的 `pid` 都有独立的 `p`、`i`、`d` 等参数。
+例如左前轮为 `/hero_chassis_controller/front_left/pid`。
+在线调整只影响本次运行；要保存结果，需将调整后的值写回 `config/default.yaml`。
+该文件也保存初始目标角速度 `target_velocity`，默认值为零。
 
-[comment]: <> (            year = {2015})
+## 实现参考
 
-[comment]: <> (        })
+- [ros_control 官方轮速控制器源码](https://github.com/ros-controls/ros_controllers/blob/noetic-devel/effort_controllers/src/joint_velocity_controller.cpp)：读取速度、计算误差、发送力矩的调用方式。
+- [control_toolbox 官方 PID 源码](https://github.com/ros-controls/control_toolbox/blob/noetic-devel/src/pid.cpp)：PID 参数读取、状态发布和动态调参接口。
 
-## Installation
+## 许可证
 
-### Installation from Packages
-
-To install all packages from the this repository as Debian packages use
-
-    sudo apt-get install ros-noetic-...
-
-Or better, use `rosdep`:
-
-	sudo rosdep install --from-paths src
-
-### Building from Source
-
-#### Dependencies
-
-- [Robot Operating System (ROS)](http://wiki.ros.org) (middleware for robotics),
-- [Eigen] (linear algebra library)
-
-  sudo rosdep install --from-paths src
-
-#### Building
-
-To build from source, clone the latest version from this repository into your catkin workspace and compile the package
-using
-
-	cd catkin_workspace/src
-	git clone https://github.com/ethz-asl/ros_best_practices.git
-	cd ../
-	rosdep install --from-paths . --ignore-src
-	catkin_make
-
-### Running in Docker
-
-Docker is a great way to run an application with all dependencies and libraries bundles together. Make sure
-to [install Docker](https://docs.docker.com/get-docker/) first.
-
-First, spin up a simple container:
-
-	docker run -ti --rm --name ros-container ros:noetic bash
-
-This downloads the `ros:noetic` image from the Docker Hub, indicates that it requires an interactive terminal (`-t, -i`)
-, gives it a name (`--name`), removes it after you exit the container (`--rm`) and runs a command (`bash`).
-
-Now, create a catkin workspace, clone the package, build it, done!
-
-	apt-get update && apt-get install -y git
-	mkdir -p /ws/src && cd /ws/src
-	git clone https://github.com/leggedrobotics/ros_best_practices.git
-	cd ..
-	rosdep install --from-path src
-	catkin_make
-	source devel/setup.bash
-	roslaunch ros_package_template ros_package_template.launch
-
-### Unit Tests
-
-Run the unit tests with
-
-	catkin_make run_tests_ros_package_template
-
-### Static code analysis
-
-Run the static code analysis with
-
-	catkin_make roslint_ros_package_template
-
-## Usage
-
-Describe the quickest way to run this software, for example:
-
-Run the main node with
-
-	roslaunch ros_package_template ros_package_template.launch
-
-## Config files
-
-Config file folder/set 1
-
-* **config_file_1.yaml** Shortly explain the content of this config file
-
-Config file folder/set 2
-
-* **...**
-
-## Launch files
-
-* **launch_file_1.launch:** shortly explain what is launched (e.g standard simulation, simulation with gdb,...)
-
-  Argument set 1
-
-    - **`argument_1`** Short description (e.g. as commented in launch file). Default: `default_value`.
-
-  Argument set 2
-
-    - **`...`**
-
-* **...**
-
-## Nodes
-
-### ros_package_template
-
-Reads temperature measurements and computed the average.
-
-#### Subscribed Topics
-
-* **`/temperature`** ([sensor_msgs/Temperature])
-
-  The temperature measurements from which the average is computed.
-
-#### Published Topics
-
-...
-
-#### Services
-
-* **`get_average`** ([std_srvs/Trigger])
-
-  Returns information about the current average. For example, you can trigger the computation from the console with
-
-  	rosservice call /ros_package_template/get_average
-
-#### Parameters
-
-* **`subscriber_topic`** (string, default: "/temperature")
-
-  The name of the input topic.
-
-* **`cache_size`** (int, default: 200, min: 0, max: 1000)
-
-  The size of the cache.
-
-### NODE_B_NAME
-
-...
-
-## Bugs & Feature Requests
-
-Please report bugs and request features using the [Issue Tracker](https://github.com/gdut-dynamic-x/rm_template/issues)
-.
-
-
-[ROS]: http://www.ros.org
-
-[rviz]: http://wiki.ros.org/rviz
-
-[Eigen]: http://eigen.tuxfamily.org
-
-[std_srvs/Trigger]: http://docs.ros.org/api/std_srvs/html/srv/Trigger.html
-
-[sensor_msgs/Temperature]: http://docs.ros.org/api/sensor_msgs/html/msg/Temperature.html
+沿用模板的 [BSD 3-Clause 许可证](LICENSE)。
